@@ -2,28 +2,27 @@
 // Created by ubuntu on 12/22/16.
 //
 
-#include <stdio.h>
 #include <sys/socket.h>
 #include <net/if.h>
 #include <linux/if_tun.h>
 #include <fcntl.h>
-#include <string.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#include "devices.h"
+#include "device.h"
 #include "utils.h"
+#include "common.h"
 
 int tun_init(struct vpnif *dev) {
     struct ifreq ifr;
     int fd, err;
     fd = open("/dev/net/tun", O_RDWR);
     if (fd < 0) {
-        perror_exit("Open tun devices failed");
+        perror_exit("open() - /dev/net/tun");
 
     }
     bzero(&ifr, sizeof(ifr));
-    ifr.ifr_ifru.ifru_flags = IFF_TUN;
+    ifr.ifr_ifru.ifru_flags = IFF_TUN | IFF_NO_PI;
     if (dev->tun_dev) {
         strncpy(ifr.ifr_ifrn.ifrn_name, dev->tun_dev, IF_NAMESIZE);
     }
@@ -31,7 +30,7 @@ int tun_init(struct vpnif *dev) {
     err = ioctl(fd, TUNSETIFF, (void *) &ifr);
     if (err < 0) {
         close(fd);
-        perror_exit("Create tun interface failed");
+        perror_exit("ioctl() - TUNSETIFF");
     }
     strcpy(dev->tun_dev, ifr.ifr_name);
     dev->fd = fd;
@@ -44,7 +43,7 @@ int tun_remove(struct vpnif *dev) {
     err = ioctl(dev->fd, TUNSETPERSIST, 0);
     if (err < 0) {
         close(dev->fd);
-        perror_exit("Create tun interface failed");
+        perror_exit("ioctl() - TUNSETPRESIST");
     }
     close(dev->fd);
     dev->fd = 0;

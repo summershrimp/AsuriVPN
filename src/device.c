@@ -79,6 +79,13 @@ int tun_set_address(struct vpnif *dev) {
     if (err) {
         perror_exit("ioctl() - SIOCSIFADDR");
     }
+
+    ifr.ifr_ifru.ifru_mtu = 1400;
+    err = ioctl(sockfd, SIOCGIFMTU, (void *) &ifr);
+    if (err) {
+        perror_exit("ioctl() - SIOCGIFMTU");
+    }
+
     close(sockfd);
     return 0;
 }

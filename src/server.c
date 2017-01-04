@@ -9,6 +9,10 @@
 #include "event.h"
 #include "config.h"
 #include "common.h"
+#include "ipcfg.h"
+#include "protocal.h"
+#include "utils.h"
+#include "analyze.h"
 
 int listen_fd = -1;
 struct event listen_event;
@@ -21,7 +25,8 @@ int server_udp_handler(struct event e);
 int server_tcp_connect_handler(struct event e);
 int server_tcp_client_handler(struct event e);
 int server_tun_handler(struct event e);
-
+int server_reply_mdhcp(struct sockaddr_in addr);
+int server_send_to_tun(char *buf, unsigned int size);
 int server_init() {
     int err;
 
@@ -79,19 +84,31 @@ int server_init_tcp(){
 }
 
 int server_tun_handler(struct event e) {
-    char buf[1500];
-    int size, err;
+    char buf[1400];
+    char sendbuf[1500];
+    struct asuri_proto proto;
+    int size, err, sendsize = 0;
+    in_addr_t ip;
     size = read(e.fd, buf, sizeof(buf));
-    if(size < 0) {
+    if (size < 0) {
         perror("read() - tun");
         return -1;
     }
 
-    err = sendto(listen_fd, buf, size, 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
-
-    if(err < 0) {
-        perror("write() - socket");
-        return -1;
+    ip = get_dist_ip(buf, size);
+    struct sockaddr_in peer_addr = ipcfg_get_peer_sockaddr(ip);
+    if (peer_addr.sin_addr.s_addr != 0) {
+        proto.type = MSG;
+        proto.version = 1;
+        memcpy(sendbuf, &proto, sizeof(proto));
+        sendsize += sizeof(proto);
+        memcpy(sendbuf + sendsize, buf, size);
+        sendsize += size;
+        err = sendto(listen_fd, sendbuf, sendsize, 0, (struct sockaddr *) &peer_addr, sizeof(peer_addr));
+        if (err < 0) {
+            perror("write() - socket");
+            return -1;
+        }
     }
 
     return 0;
@@ -101,15 +118,18 @@ int server_udp_handler(struct event e) {
     char buf[1500];
     int size, err;
     size = recvfrom(e.fd, buf, sizeof(buf), 0, (struct sockaddr *)&client_addr, &err);
+
     if(size < 0) {
         perror("read() - udp");
         return -1;
     }
 
-    err = write(device.fd, buf, size);
-    if(err < 0) {
-        perror("write() - tun");
-        return -1;
+    struct asuri_proto *p = (struct asuri_proto*) buf;
+    switch(p->type){
+        case MDHCP_REQ: server_reply_mdhcp(client_addr);break;
+        case AUTH_SEND: break;
+        case MSG: server_send_to_tun(buf + sizeof(struct asuri_proto), size - sizeof(struct asuri_proto));
+        default: break;
     }
 
     return 0;
@@ -121,4 +141,37 @@ int server_tcp_connect_handler(struct event e) {
 
 int server_tcp_client_handler(struct event e) {
     return 0;
+}
+
+int server_reply_mdhcp(struct sockaddr_in addr) {
+    struct mdhcp peer_addr = ipcfg_new_mdhcp(addr);
+    struct asuri_proto proto;
+    char buf[1400];
+    int size = 0;
+    unsigned int err;
+    proto.version = 1;
+    proto.type = MDHCP_ACK;
+    memcpy(buf, &proto, sizeof(proto));
+    size += sizeof(proto);
+    memcpy(buf + size, &peer_addr, sizeof(peer_addr));
+    size += sizeof(peer_addr);
+
+    err = sendto(listen_fd, buf, size, 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
+
+    if(err < 0) {
+        perror("write() - socket");
+        return -1;
+    }
+    return 0;
+}
+
+int server_send_to_tun(char buf[], unsigned int size){
+    unsigned int err;
+    err = write(device.fd, buf, size);
+    if(err < 0) {
+        perror("write() - tun");
+        return -1;
+    }
+    return 0;
+
 }

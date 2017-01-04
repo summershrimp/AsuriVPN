@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
-
+#include <netinet/ip.h>
 
 #include "utils.h"
 
@@ -52,3 +52,7 @@ int make_nonblock(int fd) {
     return 0;
 }
 
+in_addr_t get_dist_ip(unsigned char buf[], int size){
+    struct iphdr *hdr = (struct iphdr *) buf;
+    return hdr->daddr;
+}

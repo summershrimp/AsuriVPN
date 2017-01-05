@@ -3,6 +3,7 @@
 //
 
 #include <arpa/inet.h>
+#include <pthread.h>
 
 #include "server.h"
 #include "device.h"
@@ -27,6 +28,20 @@ int server_tcp_client_handler(struct event e);
 int server_tun_handler(struct event e);
 int server_reply_mdhcp(struct sockaddr_in addr);
 int server_send_to_tun(char *buf, unsigned int size);
+pthread_t ttun, tudp;
+void* pthread_server_tun(void *ptr){
+    while(1){
+        log_debug("tun-handler");
+        server_tun_handler(tun_event);
+    }
+}
+void* pthread_server_udp(void *ptr){
+    while(1){
+        log_debug("udp-handler");
+        server_udp_handler(listen_event);
+    }
+}
+
 int server_init() {
     int err;
 
@@ -36,20 +51,24 @@ int server_init() {
     tun_event.fd = device.fd;
     tun_event.type = EVENT_TUN;
     tun_event.handler = server_tun_handler;
-    event_add(&tun_event, EPOLLIN|EPOLLET);
+    event_add(&tun_event, EPOLLIN);
 
     if(l4proto == IPPROTO_UDP) {
         err = server_init_udp();
+
         if(err < 0) {
             exit(-1);
         }
+//        pthread_create(&ttun, NULL, pthread_server_tun, NULL);
+//        pthread_create(&tudp, NULL, pthread_server_udp, NULL);
+//        pthread_join(tudp, NULL);
     } else if (l4proto == IPPROTO_TCP) {
         err = server_init_tcp();
         if(err < 0) {
             exit(-1);
         }
     } else {
-        fputs("unknown link protocol\n", stderr);
+        log_error("unknown link protocol");
         exit(-1);
     }
     return 0;
@@ -73,7 +92,7 @@ int server_init_udp() {
     listen_event.fd = listen_fd;
     listen_event.type = EVENT_SOCKET;
     listen_event.handler = server_udp_handler;
-    event_add(&listen_event, EPOLLIN | EPOLLET);
+    event_add(&listen_event, EPOLLIN);
     return 0;
 }
 
@@ -83,18 +102,21 @@ int server_init_tcp(){
     return -1;
 }
 
+
 int server_tun_handler(struct event e) {
     char buf[1400];
     char sendbuf[1500];
     struct asuri_proto proto;
     int size, err, sendsize = 0;
     in_addr_t ip;
+
     size = read(e.fd, buf, sizeof(buf));
     if (size < 0) {
         perror("read() - tun");
         return -1;
     }
 
+    log_debug("message from tun, size: %d", size);
     ip = get_dist_ip(buf, size);
     struct sockaddr_in peer_addr = ipcfg_get_peer_sockaddr(ip);
     if (peer_addr.sin_addr.s_addr != 0) {
@@ -111,26 +133,36 @@ int server_tun_handler(struct event e) {
         }
     }
 
+
     return 0;
 }
+
+
+
 
 int server_udp_handler(struct event e) {
     char buf[1500];
     int size, err;
     struct sockaddr_in addr;
-    size = recvfrom(e.fd, buf, sizeof(buf), 0, (struct sockaddr *)&addr, &err);
 
-    if(size < 0) {
+    size = recvfrom(e.fd, buf, sizeof(buf), 0, (struct sockaddr *) &addr, &err);
+
+    if (size < 0) {
         perror("read() - udp");
         return -1;
     }
 
-    struct asuri_proto *p = (struct asuri_proto*) buf;
-    switch(p->type){
-        case MDHCP_REQ: server_reply_mdhcp(addr);break;
-        case AUTH_SEND: break;
-        case MSG: server_send_to_tun(buf + sizeof(struct asuri_proto), size - sizeof(struct asuri_proto));
-        default: break;
+    struct asuri_proto *p = (struct asuri_proto *) buf;
+    switch (p->type) {
+        case MDHCP_REQ:
+            server_reply_mdhcp(addr);
+            break;
+        case AUTH_SEND:
+            break;
+        case MSG:
+            server_send_to_tun(buf + sizeof(struct asuri_proto), size - sizeof(struct asuri_proto));
+        default:
+            break;
     }
 
     return 0;
@@ -169,6 +201,7 @@ int server_reply_mdhcp(struct sockaddr_in addr) {
 int server_send_to_tun(char buf[], unsigned int size){
     unsigned int err;
     err = write(device.fd, buf, size);
+    log_debug("message send to tun, size: %d", size);
     if(err < 0) {
         perror("write() - tun");
         return -1;

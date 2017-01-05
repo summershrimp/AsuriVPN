@@ -9,12 +9,14 @@
 #include "protocal.h"
 #include "ipcfg.h"
 #include <arpa/inet.h>
-
+#include <pthread.h>
 
 struct event client_event;
 struct event tun_event;
 struct sockaddr_in server_addr;
 int client_fd;
+
+pthread_t ttun,tudp;
 
 int client_init_udp();
 int client_init_tcp();
@@ -23,6 +25,20 @@ int client_tun_handler(struct event e);
 int client_set_address(struct mdhcp address);
 int client_send_to_tun(char *buf, int size);
 
+void* pthread_client_tun(void *ptr){
+    while(1){
+        log_debug("tun-handler");
+        client_tun_handler(tun_event);
+    }
+}
+void* pthread_client_udp(void *ptr){
+    while(1){
+        log_debug("udp-handler");
+        client_udp_handler(client_event);
+    }
+}
+
+
 int client_init() {
     int err;
 
@@ -30,12 +46,15 @@ int client_init() {
     tun_event.fd = device.fd;
     tun_event.type = EVENT_TUN;
     tun_event.handler = client_tun_handler;
-    event_add(&tun_event, EPOLLIN|EPOLLET);
+    event_add(&tun_event, EPOLLIN);
     if(l4proto == IPPROTO_UDP) {
         err = client_init_udp();
         if(err < 0) {
             exit(-1);
         }
+        //pthread_create(&ttun, NULL, pthread_client_tun, NULL);
+        //pthread_create(&tudp, NULL, pthread_client_udp, NULL);
+        //pthread_join(tudp, NULL);
     } else if (l4proto == IPPROTO_TCP) {
         err = client_init_tcp();
         if(err < 0) {
@@ -57,7 +76,7 @@ int client_init_udp() {
     client_event.fd = sockfd;
     client_event.type = EVENT_SOCKET;
     client_event.handler = client_udp_handler;
-    event_add(&client_event, EPOLLIN|EPOLLET);
+    event_add(&client_event, EPOLLIN);
 
     struct asuri_proto proto;
     proto.version = 1;
@@ -86,6 +105,7 @@ int client_tun_handler(struct event e) {
         perror("read() - tun");
         return -1;
     }
+    log_debug("message from tun, size: %d", size);
     struct asuri_proto proto;
     proto.type = MSG;
     proto.version = 1;
@@ -113,7 +133,6 @@ int client_udp_handler(struct event e) {
         perror("read() - udp");
         return -1;
     }
-
     p = (struct asuri_proto *) buf;
     switch(p->type){
         case MDHCP_ACK: client_set_address(*((struct mdhcp*)(buf + sizeof(struct asuri_proto)))); break;
@@ -135,6 +154,7 @@ int client_set_address(struct mdhcp address){
 
 int client_send_to_tun(char *buf, int size){
     int err;
+    log_debug("message send to tun, size: %d", size);
     err = write(device.fd, buf, size);
     if(err < 0) {
         perror("write() - tun");

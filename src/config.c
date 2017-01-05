@@ -34,6 +34,7 @@ int config_init() {
     char buf[1024];
     char *p;
     cfg = fopen(cfg_file, "r");
+
     if(NULL == cfg){
         perror("fopen() - cfg_file");
     }
@@ -53,51 +54,51 @@ int line_process(char *buf){
     int t, n;
     if(!key_compare("server", buf)){
         server = 1;
-        fputs("Server mode configured.\n", stderr);
+        log_info("Server mode configured.");
     } else if(!key_compare("client", buf)) {
         client = 1;
-        fputs("Client mode configured.\n", stderr);
+        log_info("Client mode configured.");
     }else if(!key_compare("listen", buf)) {
         sscanf(buf, "listen %s",tmp);
         listen_addr = inet_addr(tmp);
         if(listen_addr == INADDR_NONE) {
-            fprintf(stderr, "Wrong listen address: %s\n", tmp);
+            log_error("Wrong listen address: %s", tmp);
             exit(-1);
         }
-        fprintf(stderr, "Listen on: %s configured\n", inet_ntoa(*(struct in_addr *)&listen_addr));
+        log_info("Listen on: %s configured", inet_ntoa(*(struct in_addr *)&listen_addr));
     }else if(!key_compare("port", buf)) {
         t = sscanf(buf, "port %d", &port);
         if(t == 0){
-            fputs("port in config file error.", stderr);
+            log_error("port in config file error.");
             exit(0);
         }
-        fprintf(stderr, "port: %d configured\n", port);
+        log_info("port: %d configured", port);
     }else if(!key_compare("net", buf)) {
         n = sscanf(buf, "net %s", tmp);
         char *p;
         if(n != 1){
-            fputs("subnet config error.", stderr);
+            log_error("subnet config error.");
             exit(0);
         }
         strtok(tmp,"/");
         p = strtok(NULL, "/");
         if(p == NULL) {
-            fputs("subnet mask config error.", stderr);
+            log_error("subnet mask config error.");
             exit(0);
         }
         t = atoi(p);
         if(t == 0){
-            fputs("subnet mask config error.", stderr);
+            log_error("subnet mask config error.");
             exit(0);
         }
         addr_begin = calc_subnet_begin(tmp, t);
         if(addr_begin == INADDR_NONE) {
-            fprintf(stderr, "Wrong subnet address: %s\n", tmp);
+            log_error("Wrong subnet address: %s", tmp);
             exit(-1);
         }
         cfg_netmask = calc_subnet_netmask(t);
         if(cfg_netmask == INADDR_NONE){
-            fprintf(stderr, "Wrong subnet netmask: %d\n", t);
+            log_error("Wrong subnet netmask: %d", t);
             exit(-1);
         }
         addr_max = calc_subnet_host_count(t);
@@ -105,24 +106,24 @@ int line_process(char *buf){
         device.mask = cfg_netmask;
         device.addr = tns;
         ++addr_begin;
-        fprintf(stderr,"Subnet configured, address: %s ", inet_ntoa(*(struct in_addr *)&tns));
-        fprintf(stderr, "netmask: %s\n", inet_ntoa(*(struct in_addr *)&cfg_netmask));
+        log_info("Subnet configured, address: %s ", inet_ntoa(*(struct in_addr *)&tns));
+        log_info("netmask: %s", inet_ntoa(*(struct in_addr *)&cfg_netmask));
     }else if(!key_compare("udp", buf)) {
         l4proto = IPPROTO_UDP;
-        fputs("udp mode configured.\n", stderr);
+        log_info("udp mode configured.");
     }else if(!key_compare("tcp", buf)) {
         l4proto = IPPROTO_TCP;
-        fputs("udp mode configured.\n", stderr);
+        log_info("udp mode configured.");
     }else if(!key_compare("connect", buf)) {
         sscanf(buf, "connect %s",tmp);
         connect_addr = inet_addr(tmp);
         if(listen_addr == INADDR_NONE) {
-            fprintf(stderr, "Wrong connect address: %s\n", tmp);
+            log_error("Wrong connect address: %s");
             exit(-1);
         }
-        fprintf(stderr, "connect %s configured\n", inet_ntoa(*(struct in_addr *)&connect_addr));
+        log_info("connect %s configured", inet_ntoa(*(struct in_addr *)&connect_addr));
     } else {
-        fprintf(stderr, "Unknown config: %s", buf);
+        log_warn("Unknown config: %s", buf);
     }
 }
 

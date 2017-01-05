@@ -7,20 +7,22 @@
 #include "event.h"
 #include "config.h"
 #include "common.h"
+#include "analyze.h"
 
 int main(int argc, char **argv) {
     //make_daemon();
+    logfile = stderr;
     config_init();
     event_init_loop(fd_max);
     if(!(server ^ client)) {
-        fputs("Cannot run in both server mode and client mode", stderr);
+        log_error("Cannot run in both server mode and client mode");
         exit(-1);
     }
     if(client == 1) {
-        fputs("Client mode\n", stderr);
+        log_info("Client mode");
         client_init();
     } else if( server == 1) {
-        fputs("Server mode\n", stderr);
+        log_info("Server mode");
         server_init();
     }
 

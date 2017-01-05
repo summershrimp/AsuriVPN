@@ -56,7 +56,7 @@ int event_add(struct event *e, uint32_t events) {
     struct epoll_event ev;
     ev.events = events;
     ev.data.ptr = (void *)e;
-    make_nonblock(e->fd);
+    //make_nonblock(e->fd);
     if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, e->fd, &ev) == -1) {
         perror("epoll_ctl() - EPOLL_CTL_ADD");
         exit(errno);

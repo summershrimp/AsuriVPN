@@ -11,5 +11,5 @@
 #include <errno.h>
 #include <unistd.h>
 #include <stdint.h>
-
+#include "logger.h"
 #endif //ASURIVPN_COMMON_H

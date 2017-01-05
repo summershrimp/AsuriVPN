@@ -69,22 +69,23 @@ int tun_set_address(struct vpnif *dev) {
 
     ifr.ifr_ifru.ifru_addr = *(struct sockaddr *) &addr;
     err = ioctl(sockfd, SIOCSIFADDR, (void *) &ifr);
-    if (err) {
+    if (err < 0) {
         perror_exit("ioctl() - SIOCSIFADDR");
     }
 
     addr.sin_addr.s_addr = dev->mask;
     ifr.ifr_ifru.ifru_netmask = *(struct sockaddr *) &addr;
     err = ioctl(sockfd, SIOCSIFNETMASK, (void *) &ifr);
-    if (err) {
+    if (err < 0) {
         perror_exit("ioctl() - SIOCSIFADDR");
     }
 
     ifr.ifr_ifru.ifru_mtu = 1400;
-    err = ioctl(sockfd, SIOCGIFMTU, (void *) &ifr);
-    if (err) {
-        perror_exit("ioctl() - SIOCGIFMTU");
+    err = ioctl(sockfd, SIOCSIFMTU, (void *) &ifr);
+    if (err < 0) {
+        perror_exit("ioctl() - SIOCSIFMTU");
     }
+    log_debug("SIOCSIFMTU %d",err);
 
     close(sockfd);
     return 0;

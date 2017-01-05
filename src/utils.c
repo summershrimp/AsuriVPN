@@ -9,7 +9,8 @@
 #include <netinet/ip.h>
 
 #include "utils.h"
-
+#include "common.h"
+#include "ctype.h"
 void perror_exit(char *msg) {
     perror(msg);
     exit(errno);
@@ -55,4 +56,15 @@ int make_nonblock(int fd) {
 in_addr_t get_dist_ip(unsigned char buf[], int size){
     struct iphdr *hdr = (struct iphdr *) buf;
     return hdr->daddr;
+}
+
+
+int strblank(char *str){
+    int t = strlen(str);
+    int i;
+    for(i=0; i<t; ++i){
+        if(!isspace(str[i]))
+            return 0;
+    }
+    return 1;
 }

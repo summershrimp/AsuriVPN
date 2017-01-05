@@ -50,9 +50,9 @@ int client_init_udp() {
     sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     client_fd = sockfd;
 
-    server_addr.sin_port = htons(listen_port);
+    server_addr.sin_port = htons(port);
     server_addr.sin_family = AF_INET;
-    inet_pton(AF_INET, "10.16.40.23", &server_addr.sin_addr);
+    server_addr.sin_addr.s_addr = connect_addr;
 
     client_event.fd = sockfd;
     client_event.type = EVENT_SOCKET;

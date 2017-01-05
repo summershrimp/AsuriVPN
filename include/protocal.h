@@ -5,7 +5,7 @@
 #ifndef ASURIVPN_PROTOCAL_H
 #define ASURIVPN_PROTOCAL_H
 
-enum proto_type {MDHCP_REQ = 1, MDHCP_ACK, AUTH_NEED, AUTH_SEND, MSG};
+enum proto_type {MDHCP_REQ = 1, MDHCP_ACK, AUTH_NEED, AUTH_SEND, MSG, BYE};
 
 struct asuri_proto{
     unsigned char version:8;

@@ -39,9 +39,6 @@ int server_init() {
     event_add(&tun_event, EPOLLIN|EPOLLET);
 
     if(l4proto == IPPROTO_UDP) {
-        client_addr.sin_port = 9999;
-        client_addr.sin_family = AF_INET;
-        client_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
         err = server_init_udp();
         if(err < 0) {
             exit(-1);
@@ -51,6 +48,9 @@ int server_init() {
         if(err < 0) {
             exit(-1);
         }
+    } else {
+        fputs("unknown link protocol\n", stderr);
+        exit(-1);
     }
     return 0;
 }
@@ -59,7 +59,7 @@ int server_init_udp() {
     int sockfd, err;
     sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     struct sockaddr_in addr;
-    addr.sin_port = htons(listen_port);
+    addr.sin_port = htons(port);
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = inet_addr("0.0.0.0");
 
@@ -117,7 +117,8 @@ int server_tun_handler(struct event e) {
 int server_udp_handler(struct event e) {
     char buf[1500];
     int size, err;
-    size = recvfrom(e.fd, buf, sizeof(buf), 0, (struct sockaddr *)&client_addr, &err);
+    struct sockaddr_in addr;
+    size = recvfrom(e.fd, buf, sizeof(buf), 0, (struct sockaddr *)&addr, &err);
 
     if(size < 0) {
         perror("read() - udp");
@@ -126,7 +127,7 @@ int server_udp_handler(struct event e) {
 
     struct asuri_proto *p = (struct asuri_proto*) buf;
     switch(p->type){
-        case MDHCP_REQ: server_reply_mdhcp(client_addr);break;
+        case MDHCP_REQ: server_reply_mdhcp(addr);break;
         case AUTH_SEND: break;
         case MSG: server_send_to_tun(buf + sizeof(struct asuri_proto), size - sizeof(struct asuri_proto));
         default: break;
@@ -156,7 +157,7 @@ int server_reply_mdhcp(struct sockaddr_in addr) {
     memcpy(buf + size, &peer_addr, sizeof(peer_addr));
     size += sizeof(peer_addr);
 
-    err = sendto(listen_fd, buf, size, 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
+    err = sendto(listen_fd, buf, size, 0, (struct sockaddr *)&addr, sizeof(addr));
 
     if(err < 0) {
         perror("write() - socket");

@@ -12,11 +12,14 @@ int main(int argc, char **argv) {
     //make_daemon();
     config_init();
     event_init_loop(fd_max);
-    if(argc > 1 && argv[1][0] == 'c') {
+    if(!(server ^ client)) {
+        fputs("Cannot run in both server mode and client mode", stderr);
+        exit(-1);
+    }
+    if(client == 1) {
         fputs("Client mode\n", stderr);
-        config_client();
         client_init();
-    } else {
+    } else if( server == 1) {
         fputs("Server mode\n", stderr);
         server_init();
     }

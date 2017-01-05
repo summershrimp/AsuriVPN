@@ -7,12 +7,19 @@
 #include "device.h"
 
 extern struct vpnif device;
-extern int listen_port;
+extern int port;
+extern in_addr_t listen_addr;
 extern int l4proto;
 extern int fd_max;
 extern unsigned int addr_begin;
 extern unsigned int addr_max;
 extern in_addr_t cfg_netmask;
+extern char cfg_file[256];
+extern in_addr_t connect_addr;
+
+extern int client;
+extern int server;
+
 int config_init();
-int config_client();
+
 #endif //ASURIVPN_CONFIG_H

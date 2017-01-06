@@ -34,19 +34,6 @@ int server_tun_handler(struct event *e);
 int server_reply_mdhcp(struct sockaddr_in addr);
 int server_reply_mdhcp_tcp(int fd, struct sockaddr_in addr);
 int server_send_to_tun(char *buf, unsigned int size);
-pthread_t ttun, tudp;
-void* pthread_server_tun(void *ptr){
-    while(1){
-        log_debug("tun-handler");
-        server_tun_handler(&tun_event);
-    }
-}
-void* pthread_server_udp(void *ptr){
-    while(1){
-        log_debug("udp-handler");
-        server_udp_handler(&listen_event);
-    }
-}
 
 int server_init() {
     int err;
@@ -65,9 +52,6 @@ int server_init() {
         if(err < 0) {
             exit(-1);
         }
-//        pthread_create(&ttun, NULL, pthread_server_tun, NULL);
-//        pthread_create(&tudp, NULL, pthread_server_udp, NULL);
-//        pthread_join(tudp, NULL);
     } else if (l4proto == IPPROTO_TCP) {
         err = server_init_tcp();
         if(err < 0) {
@@ -232,7 +216,6 @@ int server_tcp_connect_handler(struct event *e) {
 
     ssl = SSL_new(ctx);
     SSL_set_fd(ssl, client);
-    //SSL_connect(ssl);
     if (SSL_accept(ssl) != 1) {
         ERR_print_errors_fp(stderr);
         close(e->fd);
@@ -256,18 +239,7 @@ int server_tcp_client_handler(struct event *e) {
     int size, err;
     struct sockaddr_in *addr;
 
-    // bzero(buf, MAXBUF + 1);
-    // scanf("%s", buf);
-    // size = SSL_write(ssl, buf, strlen(buf));
-    // if (size <= 0) {
-    //     printf("Send '%s' failed, errno:%d, msg:'%s'\n", buf, errno, strerror(errno));
-    //     exit(errno);
-    // } else {
-    //     printf("Send '%s' success, bytes sent :%d\n", buf, size);
-    // }
-
-    bzero(buf, MAXBUF + 1);
-    size = SSL_read(ssl, buf, MAXBUF);
+    size = SSL_read(ssl, buf, 1500);
     if (size > 0) {
         log_debug("Receive ssl data: %d", size);
         struct asuri_proto *p = (struct asuri_proto *) buf;

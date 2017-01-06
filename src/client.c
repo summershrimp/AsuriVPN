@@ -50,20 +50,6 @@ void ShowCerts(SSL * ssl) {
     }
 }
 
-void* pthread_client_tun(void *ptr){
-    while(1){
-        log_debug("tun-handler");
-        client_tun_handler(&tun_event);
-    }
-}
-
-void* pthread_client_udp(void *ptr){
-    while(1){
-        log_debug("udp-handler");
-        client_udp_handler(&client_event);
-    }
-}
-
 int client_init() {
     int err;
 
@@ -77,9 +63,7 @@ int client_init() {
         if(err < 0) {
             exit(-1);
         }
-        //pthread_create(&ttun, NULL, pthread_client_tun, NULL);
-        //pthread_create(&tudp, NULL, pthread_client_udp, NULL);
-        //pthread_join(tudp, NULL);
+
     } else if (l4proto == IPPROTO_TCP) {
         err = client_init_tcp();
         if(err < 0) {
@@ -162,25 +146,7 @@ int client_tcp_handler(struct event *e) {
     char buf[1500];
     int size, err;
 
-    // bzero(buffer, MAXBUF + 1);
-    // size = SSL_read(ssl, buffer, MAXBUF);
-    // if (size > 0) {
-    //     printf("接收消息成功:'%s'，共%d个字节的数据\n", buffer, size);
-    // } else {
-    //     printf("消息接收失败！错误代码是%d，错误信息是'%s'\n", errno, strerror(errno));
-    //     exit(errno);
-    // }
-
-    // bzero(buffer, MAXBUF + 1);
-    // scanf("%s", buffer);
-    // size = SSL_write(ssl, buffer, strlen(buffer));
-    // if (size <= 0) {
-    //     log_error("Send '%s' failed, errno:%d, msg:'%s'", buffer, errno, strerror(errno));
-    // } else {
-    //     log_info("Send '%s' success", buffer);
-    // }
-
-    size = SSL_read(ssl, buf, MAXBUF);
+    size = SSL_read(ssl, buf, 1500);
     if(size < 0) {
         perror("read() - tcp");
         return -1;

@@ -5,6 +5,9 @@
 #ifndef ASURIVPN_SERVER_H
 #define ASURIVPN_SERVER_H
 
+#include <openssl/bio.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
 
 extern int listen_fd;
 

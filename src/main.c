@@ -13,6 +13,11 @@ int main(int argc, char **argv) {
     //make_daemon();
     logfile = stderr;
     config_init();
+
+    SSL_library_init();
+    OpenSSL_add_ssl_algorithms();
+    SSL_load_error_strings();
+
     event_init_loop(fd_max);
     if(!(server ^ client)) {
         log_error("Cannot run in both server mode and client mode");

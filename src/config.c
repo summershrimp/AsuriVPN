@@ -50,6 +50,9 @@ int config_init() {
 }
 
 int line_process(char *buf){
+    if (buf[0] == '#') {
+        return 1;
+    }
     char tmp[1024];
     int t, n;
     if(!key_compare("server", buf)){
@@ -125,6 +128,7 @@ int line_process(char *buf){
     } else {
         log_warn("Unknown config: %s", buf);
     }
+    return 0;
 }
 
 int key_compare(char* key, char *str){

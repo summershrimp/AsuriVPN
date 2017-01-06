@@ -15,10 +15,15 @@
 #include "utils.h"
 #include "analyze.h"
 
+#define MAXBUF 1024
+
 int listen_fd = -1;
 struct event listen_event;
 struct sockaddr_in client_addr;
 struct event tun_event;
+
+SSL *ssl;
+SSL_CTX *ctx;
 
 int server_init_udp();
 int server_init_tcp();
@@ -94,10 +99,25 @@ int server_init_udp() {
     listen_event.type = EVENT_SOCKET;
     listen_event.handler = server_udp_handler;
     event_add(&listen_event, EPOLLIN);
+
     return 0;
 }
 
 int server_init_tcp(){
+    ctx = SSL_CTX_new(SSLv23_server_method());
+    if (SSL_CTX_use_certificate_file(ctx, "cert.pem", SSL_FILETYPE_PEM) <= 0) {
+        log_error("Use certificate failed");
+        exit(-1);
+    } else {
+        log_info("Use certificate success");
+    }
+    if (SSL_CTX_use_PrivateKey_file(ctx, "key.pem", SSL_FILETYPE_PEM) <= 0) {
+        log_error("Use private key failed");
+        exit(-1);
+    } else {
+        log_info("Use private key success");
+    }
+
     int sockfd, err;
     sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     struct sockaddr_in addr;
@@ -118,7 +138,6 @@ int server_init_tcp(){
     event_add(&listen_event, EPOLLIN);
     return 0;
 }
-
 
 int server_tun_handler(struct event *e) {
     char buf[1400];
@@ -168,15 +187,10 @@ int server_tun_handler(struct event *e) {
             perror("write() - tun msg tcp");
             return -1;
         }
-
     }
-
 
     return 0;
 }
-
-
-
 
 int server_udp_handler(struct event *e) {
     char buf[1500];
@@ -209,12 +223,23 @@ int server_udp_handler(struct event *e) {
 int server_tcp_connect_handler(struct event *e) {
     struct sockaddr_in *addr = malloc(sizeof(struct sockaddr_in));
     int len;
-    int client = accept(e->fd, (struct sockaddr*)addr, &len);
+    int client = accept(e->fd, (struct sockaddr *)addr, &len);
     if (client < 0) {
         perror("accept() - tcp");
         return -1;
     }
-    log_debug("tcp new client: %s:%d ",inet_ntoa(addr->sin_addr), ntohs(addr->sin_port));
+    log_debug("tcp new client: %s:%d ", inet_ntoa(addr->sin_addr), ntohs(addr->sin_port));
+
+    ssl = SSL_new(ctx);
+    SSL_set_fd(ssl, e->fd);
+    // SSL_connect(ssl);
+    if (SSL_accept(ssl) == -1) {
+        perror("SSL accept");
+        close(e->fd);
+        return -1;
+    }
+    log_debug("SSL accepted");
+
     ipcfg_peer_fd_add(*addr, client);
     struct event *ev;
     ev = malloc(sizeof(struct event));
@@ -231,30 +256,62 @@ int server_tcp_client_handler(struct event *e) {
     int size, err;
     struct sockaddr_in *addr;
 
-    size = read(e->fd, buf, sizeof(buf));
-    addr = e->ptr;
-    if (size <= 0) {
-        perror("read() - tcp");
-        log_debug("tcp client disconnected. ");
-        ipcfg_peer_fd_delete(*addr);
-        event_delete(e, EPOLLIN);
-        free(e->ptr);
-        free(e);
-        return -1;
-    }
-    log_debug("tcp %d receive size:%d ", e->fd, size);
+    // bzero(buf, MAXBUF + 1);
+    // scanf("%s", buf);
+    // size = SSL_write(ssl, buf, strlen(buf));
+    // if (size <= 0) {
+    //     printf("Send '%s' failed, errno:%d, msg:'%s'\n", buf, errno, strerror(errno));
+    //     exit(errno);
+    // } else {
+    //     printf("Send '%s' success, bytes sent :%d\n", buf, size);
+    // }
 
-    struct asuri_proto *p = (struct asuri_proto *) buf;
-    switch (p->type) {
-        case MDHCP_REQ:
-            server_reply_mdhcp_tcp(e->fd, *addr);
-            break;
-        case AUTH_SEND:
-            break;
-        case MSG:
-            server_send_to_tun(buf + sizeof(struct asuri_proto), size - sizeof(struct asuri_proto));
-        default:
-            break;
+    bzero(buf, MAXBUF + 1);
+    size = SSL_read(ssl, buf, MAXBUF);
+    if (size > 0) {
+        printf("Receive %d bytes data:'%s'\n", size, buf);
+        struct asuri_proto *p = (struct asuri_proto *) buf;
+        switch (p->type) {
+            case MDHCP_REQ:
+                server_reply_mdhcp_tcp(e->fd, *addr);
+                break;
+            case AUTH_SEND:
+                break;
+            case MSG:
+                server_send_to_tun(buf + sizeof(struct asuri_proto), size - sizeof(struct asuri_proto));
+            default:
+                printf("%s", buf);
+                break;
+        }
+    } else {
+        int err = SSL_get_error(ssl, size);
+        switch (err) {
+            case SSL_ERROR_ZERO_RETURN:
+                log_debug("tcp client disconnected. ");
+                event_delete(e, EPOLLIN);
+                free(e->ptr);
+                free(e);
+                SSL_shutdown(ssl);
+                SSL_free(ssl);
+                close(e->fd);
+                return -1;
+                break;
+            case SSL_ERROR_WANT_READ:
+                log_debug("SSL_ERROR_WANT_READ");
+                break;
+            case SSL_ERROR_WANT_WRITE:
+                log_debug("SSL_ERROR_WANT_WRITE");
+                break;
+            case SSL_ERROR_SYSCALL:
+                log_debug("SSL_ERROR_SYSCALL");
+                break;
+            case SSL_ERROR_SSL:
+                log_debug("SSL_ERROR_SSL");
+                break;
+            default:
+                log_debug("SSL_get_error returns %d", err);
+                break;
+        }
     }
 
     return 0;
@@ -294,7 +351,7 @@ int server_reply_mdhcp(struct sockaddr_in addr) {
     memcpy(buf + size, &peer_addr, sizeof(peer_addr));
     size += sizeof(peer_addr);
 
-    err = sendto(listen_fd, buf, size, 0, (struct sockaddr *)&addr, sizeof(addr));
+    err = SSL_write(ssl, buf, size);
 
     if(err < 0) {
         perror("write() - mdhcp-udp");

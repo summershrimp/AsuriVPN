@@ -150,7 +150,7 @@ int client_init_tcp() {
     proto.version = 1;
     proto.type = MDHCP_REQ;
 
-    err = write(client_fd, &proto, sizeof(proto));
+    err = SSL_write(ssl, &proto, sizeof(proto));
     if(err < 0) {
         perror("sendto() - socket MDHCP_REQ");
         return -1;

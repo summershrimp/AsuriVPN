@@ -182,7 +182,7 @@ int server_tun_handler(struct event *e) {
         sendsize += sizeof(proto);
         memcpy(sendbuf + sendsize, buf, size);
         sendsize += size;
-        write(fd, sendbuf, sendsize);
+        SSL_write(ssl, sendbuf, sendsize);
         if (err < 0) {
             perror("write() - tun msg tcp");
             return -1;
@@ -231,10 +231,10 @@ int server_tcp_connect_handler(struct event *e) {
     log_debug("tcp new client: %s:%d ", inet_ntoa(addr->sin_addr), ntohs(addr->sin_port));
 
     ssl = SSL_new(ctx);
-    SSL_set_fd(ssl, e->fd);
-    // SSL_connect(ssl);
-    if (SSL_accept(ssl) == -1) {
-        perror("SSL accept");
+    SSL_set_fd(ssl, client);
+    //SSL_connect(ssl);
+    if (SSL_accept(ssl) != 1) {
+        ERR_print_errors_fp(stderr);
         close(e->fd);
         return -1;
     }
@@ -269,7 +269,7 @@ int server_tcp_client_handler(struct event *e) {
     bzero(buf, MAXBUF + 1);
     size = SSL_read(ssl, buf, MAXBUF);
     if (size > 0) {
-        printf("Receive %d bytes data:'%s'\n", size, buf);
+        log_debug("Receive ssl data: %d", size);
         struct asuri_proto *p = (struct asuri_proto *) buf;
         switch (p->type) {
             case MDHCP_REQ:
@@ -284,7 +284,7 @@ int server_tcp_client_handler(struct event *e) {
                 break;
         }
     } else {
-        int err = SSL_get_error(ssl, size);
+        err = SSL_get_error(ssl, size);
         switch (err) {
             case SSL_ERROR_ZERO_RETURN:
                 log_debug("tcp client disconnected. ");
@@ -330,7 +330,7 @@ int server_reply_mdhcp_tcp(int fd, struct sockaddr_in addr){
     memcpy(buf + size, &peer_addr, sizeof(peer_addr));
     size += sizeof(peer_addr);
 
-    err = write(fd, buf, size);
+    err = SSL_write(ssl, buf, size);
 
     if(err < 0) {
         perror("write() - mdhcp-tcp");
@@ -351,7 +351,7 @@ int server_reply_mdhcp(struct sockaddr_in addr) {
     memcpy(buf + size, &peer_addr, sizeof(peer_addr));
     size += sizeof(peer_addr);
 
-    err = SSL_write(ssl, buf, size);
+    err = write(listen_fd, buf, size);
 
     if(err < 0) {
         perror("write() - mdhcp-udp");

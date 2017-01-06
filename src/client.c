@@ -201,7 +201,7 @@ int client_tun_handler(struct event *e) {
     char sendbuf[1500];
     int size, err, sendsize = 0;
     size = read(e->fd, buf, sizeof(buf));
-    if(size < 0) {
+    if (size < 0) {
         perror("read() - tun");
         return -1;
     }
@@ -213,12 +213,15 @@ int client_tun_handler(struct event *e) {
     sendsize += sizeof(proto);
     memcpy(sendbuf + sendsize, buf, size);
     sendsize += size;
+    if (l4proto == IPPROTO_UDP) {
+        err = sendto(client_fd, sendbuf, sendsize, 0, (struct sockaddr *) &server_addr, sizeof(server_addr));
+        if(err < 0) {
+            perror("write() - socket");
+            return -1;
+        }
 
-    err = sendto(client_fd, sendbuf, sendsize, 0, (struct sockaddr *)&server_addr, sizeof(server_addr));
-
-    if(err < 0) {
-        perror("write() - socket");
-        return -1;
+    } else  if(l4proto == IPPROTO_TCP){
+        SSL_write(ssl, sendbuf, sendsize);
     }
 
     return 0;

@@ -11,7 +11,7 @@
 
 FILE *flog = NULL
 ;
-enum _log_level log_level = LOG_INFO;
+enum _log_level log_level = LOG_DEBUG;
 
 void log_set_level(enum _log_level level) {
     log_level = level;

@@ -26,6 +26,27 @@ struct sockaddr_cmp {
 };
 
 set<sockaddr_in, sockaddr_cmp> peeraddr_set;
+map<sockaddr_in, int, sockaddr_cmp> peeraddr_fd;
+
+int ipcfg_peer_fd_add(struct sockaddr_in addr, int fd){
+    peeraddr_fd.insert(make_pair(move(addr), move(fd)));
+    return 0;
+}
+
+int ipcfg_peer_fd_find(struct sockaddr_in addr){
+    if(peeraddr_fd.find(addr) == peeraddr_fd.end()) {
+        return 0;
+    }
+    return peeraddr_fd.at(addr);
+}
+
+int ipcfg_peer_fd_delete(struct sockaddr_in addr){
+    if(peeraddr_fd.find(addr) == peeraddr_fd.end()) {
+        return -1;
+    }
+    peeraddr_fd.erase(addr);
+    return 0;
+}
 
 struct mdhcp ipcfg_new_mdhcp(struct sockaddr_in peer_addr){
     struct mdhcp addr;
@@ -64,3 +85,21 @@ struct sockaddr_in ipcfg_get_peer_sockaddr(in_addr_t addr) {
     return emptycfg.peer_addr;
 }
 
+map<in_addr_t, int> local_fd;
+int ipcfg_local_fd_add(in_addr_t addr, int fd){
+    local_fd.insert(make_pair(move(addr), move(fd)));
+    return 0;
+}
+int ipcfg_local_fd_find(in_addr_t addr) {
+    if(local_fd.find(addr) == local_fd.end()){
+        return 0;
+    }
+    return local_fd.at(addr);
+}
+int ipcfg_local_fd_delete(in_addr_t addr){
+    if(local_fd.find(addr) == local_fd.end()){
+        return -1;
+    }
+    local_fd.erase(addr);
+    return 0;
+}

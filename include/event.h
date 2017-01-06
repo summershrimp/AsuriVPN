@@ -10,7 +10,7 @@
 
 enum event_type {EVENT_TUN = 1, EVENT_SOCKET};
 struct event;
-typedef int (*event_handler) (struct event e);
+typedef int (*event_handler) (struct event *e);
 struct event {
     enum event_type type;
     int fd;

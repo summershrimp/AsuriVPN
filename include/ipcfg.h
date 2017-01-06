@@ -33,7 +33,12 @@ extern int addr_allocated;
 int ipcfg_connected(struct sockaddr_in addr);
 struct mdhcp ipcfg_new_mdhcp(struct sockaddr_in peer_addr);
 struct sockaddr_in ipcfg_get_peer_sockaddr(in_addr_t addr);
-
+int ipcfg_peer_fd_add(struct sockaddr_in addr, int fd);
+int ipcfg_peer_fd_find(struct sockaddr_in addr);
+int ipcfg_peer_fd_delete(struct sockaddr_in addr);
+int ipcfg_local_fd_add(in_addr_t addr, int fd);
+int ipcfg_local_fd_find(in_addr_t addr);
+int ipcfg_local_fd_delete(in_addr_t addr);
 #ifdef __cplusplus
 };
 #endif

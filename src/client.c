@@ -20,21 +20,22 @@ pthread_t ttun,tudp;
 
 int client_init_udp();
 int client_init_tcp();
-int client_udp_handler(struct event e);
-int client_tun_handler(struct event e);
+int client_udp_handler(struct event *e);
+int client_tcp_handler(struct event *e);
+int client_tun_handler(struct event *e);
 int client_set_address(struct mdhcp address);
 int client_send_to_tun(char *buf, int size);
 
 void* pthread_client_tun(void *ptr){
     while(1){
         log_debug("tun-handler");
-        client_tun_handler(tun_event);
+        client_tun_handler(&tun_event);
     }
 }
 void* pthread_client_udp(void *ptr){
     while(1){
         log_debug("udp-handler");
-        client_udp_handler(client_event);
+        client_udp_handler(&client_event);
     }
 }
 
@@ -91,16 +92,60 @@ int client_init_udp() {
 }
 
 int client_init_tcp() {
-    fputs("TCP Connection has not been implemented\n", stderr);
-    exit(-1);
-    return -1;
+    int sockfd, err;
+    sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    client_fd = sockfd;
+
+    server_addr.sin_port = htons(port);
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = connect_addr;
+
+    err = connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr));
+    if(err != 0){
+        perror("connect() - tcp");
+        exit(errno);
+    }
+    client_event.fd = sockfd;
+    client_event.type = EVENT_SOCKET;
+    client_event.handler = client_tcp_handler;
+    event_add(&client_event, EPOLLIN);
+
+    struct asuri_proto proto;
+    proto.version = 1;
+    proto.type = MDHCP_REQ;
+
+    err = write(client_fd, &proto, sizeof(proto));
+    if(err < 0) {
+        perror("sendto() - socket MDHCP_REQ");
+        return -1;
+    }
+    return 0;
 }
 
-int client_tun_handler(struct event e) {
+int client_tcp_handler(struct event *e) {
+    char buf[1500];
+    int size, err;
+    struct asuri_proto *p;
+    size = read(e->fd, buf, sizeof(buf));
+    if(size < 0) {
+        perror("read() - tcp");
+        return -1;
+    }
+    p = (struct asuri_proto *) buf;
+    switch(p->type){
+        case MDHCP_ACK: client_set_address(*((struct mdhcp*)(buf + sizeof(struct asuri_proto)))); break;
+        case AUTH_NEED: break;
+        case MSG: client_send_to_tun(buf+sizeof(struct asuri_proto), size - sizeof(struct asuri_proto));
+        default: break;
+    }
+
+    return 0;
+}
+int client_tun_handler(struct event *e) {
     char buf[1400];
     char sendbuf[1500];
     int size, err, sendsize = 0;
-    size = read(e.fd, buf, sizeof(buf));
+    size = read(e->fd, buf, sizeof(buf));
     if(size < 0) {
         perror("read() - tun");
         return -1;
@@ -124,11 +169,11 @@ int client_tun_handler(struct event e) {
     return 0;
 }
 
-int client_udp_handler(struct event e) {
+int client_udp_handler(struct event *e) {
     char buf[1500];
     int size, err;
     struct asuri_proto *p;
-    size = read(e.fd, buf, sizeof(buf));
+    size = read(e->fd, buf, sizeof(buf));
     if(size < 0) {
         perror("read() - udp");
         return -1;

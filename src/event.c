@@ -40,7 +40,7 @@ int event_start_loop() {
         }
         for(i=0; i < event_cnt; ++i) {
             e = (struct event *)events[i].data.ptr;
-            e->handler(*e);
+            e->handler(e);
         }
     }
     free(events);

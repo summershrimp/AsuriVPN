@@ -113,7 +113,7 @@ int line_process(char *buf){
         log_info("udp mode configured.");
     }else if(!key_compare("tcp", buf)) {
         l4proto = IPPROTO_TCP;
-        log_info("udp mode configured.");
+        log_info("tcp mode configured.");
     }else if(!key_compare("connect", buf)) {
         sscanf(buf, "connect %s",tmp);
         connect_addr = inet_addr(tmp);

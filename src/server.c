@@ -22,7 +22,6 @@ struct event listen_event;
 struct sockaddr_in client_addr;
 struct event tun_event;
 
-SSL *ssl;
 SSL_CTX *ctx;
 
 int server_init_udp();
@@ -32,7 +31,7 @@ int server_tcp_connect_handler(struct event *e);
 int server_tcp_client_handler(struct event *e);
 int server_tun_handler(struct event *e);
 int server_reply_mdhcp(struct sockaddr_in addr);
-int server_reply_mdhcp_tcp(int fd, struct sockaddr_in addr);
+int server_reply_mdhcp_tcp(struct ipcfg *info);
 int server_send_to_tun(char *buf, unsigned int size);
 
 int server_init() {
@@ -129,7 +128,7 @@ int server_tun_handler(struct event *e) {
     struct asuri_proto proto;
     int size, err, sendsize = 0, fd;
     in_addr_t ip;
-
+    struct ipcfg *info;
     size = read(e->fd, buf, sizeof(buf));
     if (size < 0) {
         perror("read() - tun");
@@ -156,8 +155,8 @@ int server_tun_handler(struct event *e) {
             }
         }
     } else if(l4proto == IPPROTO_TCP){
-        fd = ipcfg_local_fd_find(ip);
-        if(fd < 1){
+        info = ipcfg_map_find(ip);
+        if(!info){
             return -1;
         }
         proto.type = MSG;
@@ -166,7 +165,7 @@ int server_tun_handler(struct event *e) {
         sendsize += sizeof(proto);
         memcpy(sendbuf + sendsize, buf, size);
         sendsize += size;
-        SSL_write(ssl, sendbuf, sendsize);
+        SSL_write(info->ssl, sendbuf, sendsize);
         if (err < 0) {
             perror("write() - tun msg tcp");
             return -1;
@@ -205,8 +204,10 @@ int server_udp_handler(struct event *e) {
 }
 
 int server_tcp_connect_handler(struct event *e) {
+    SSL *ssl;
     struct sockaddr_in *addr = malloc(sizeof(struct sockaddr_in));
-    int len;
+    bzero(addr, sizeof(struct sockaddr_in));
+    int len = sizeof(struct sockaddr_in);
     int client = accept(e->fd, (struct sockaddr *)addr, &len);
     if (client < 0) {
         perror("accept() - tcp");
@@ -222,14 +223,18 @@ int server_tcp_connect_handler(struct event *e) {
         return -1;
     }
     log_debug("SSL accepted");
+    struct ipcfg *info = malloc(sizeof(struct ipcfg));
+    info->peer_fd = client;
+    info->last_alive = time(NULL);
+    info->peer_addr = *addr;
+    info->ssl = ssl;
 
-    ipcfg_peer_fd_add(*addr, client);
     struct event *ev;
     ev = malloc(sizeof(struct event));
     ev->fd = client;
     ev->handler = server_tcp_client_handler;
     ev->type = EVENT_SOCKET;
-    ev->ptr = addr;
+    ev->ptr = info;
     event_add(ev, EPOLLIN);
     return 0;
 }
@@ -238,14 +243,15 @@ int server_tcp_client_handler(struct event *e) {
     char buf[1500];
     int size, err;
     struct sockaddr_in *addr;
-
+    struct ipcfg *info = e->ptr;
+    SSL *ssl = info->ssl;
     size = SSL_read(ssl, buf, 1500);
     if (size > 0) {
         log_debug("Receive ssl data: %d", size);
         struct asuri_proto *p = (struct asuri_proto *) buf;
         switch (p->type) {
             case MDHCP_REQ:
-                server_reply_mdhcp_tcp(e->fd, *addr);
+                server_reply_mdhcp_tcp(info);
                 break;
             case AUTH_SEND:
                 break;
@@ -261,6 +267,7 @@ int server_tcp_client_handler(struct event *e) {
             case SSL_ERROR_ZERO_RETURN:
                 log_debug("tcp client disconnected. ");
                 event_delete(e, EPOLLIN);
+                ipcfg_map_delete(info->local_addr.s_addr);
                 free(e->ptr);
                 free(e);
                 SSL_shutdown(ssl);
@@ -289,20 +296,21 @@ int server_tcp_client_handler(struct event *e) {
     return 0;
 }
 
-int server_reply_mdhcp_tcp(int fd, struct sockaddr_in addr){
-    int size, err;
-    struct mdhcp peer_addr = ipcfg_new_mdhcp(addr);
+int server_reply_mdhcp_tcp(struct ipcfg *info){
+    int size = 0, err;
+    struct mdhcp dhcp_addr = ipcfg_new_mdhcp(info->peer_addr);
+    info->local_addr = dhcp_addr.address;
     struct asuri_proto proto;
     char buf[1400];
-    ipcfg_local_fd_add(peer_addr.address.s_addr, fd);
+    ipcfg_map_add(dhcp_addr.address.s_addr, info);
     proto.version = 1;
     proto.type = MDHCP_ACK;
     memcpy(buf, &proto, sizeof(proto));
     size += sizeof(proto);
-    memcpy(buf + size, &peer_addr, sizeof(peer_addr));
-    size += sizeof(peer_addr);
+    memcpy(buf + size, &dhcp_addr, sizeof(dhcp_addr));
+    size += sizeof(dhcp_addr);
 
-    err = SSL_write(ssl, buf, size);
+    err = SSL_write(info->ssl, buf, size);
 
     if(err < 0) {
         perror("write() - mdhcp-tcp");

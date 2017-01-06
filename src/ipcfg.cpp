@@ -26,25 +26,24 @@ struct sockaddr_cmp {
 };
 
 set<sockaddr_in, sockaddr_cmp> peeraddr_set;
-map<sockaddr_in, int, sockaddr_cmp> peeraddr_fd;
-
-int ipcfg_peer_fd_add(struct sockaddr_in addr, int fd){
-    peeraddr_fd.insert(make_pair(move(addr), move(fd)));
+map<in_addr_t, struct ipcfg *> localaddr_ipset_map;
+int ipcfg_map_add(in_addr_t addr, struct ipcfg *set){
+    localaddr_ipset_map.insert(make_pair(move(addr), move(set)));
     return 0;
 }
 
-int ipcfg_peer_fd_find(struct sockaddr_in addr){
-    if(peeraddr_fd.find(addr) == peeraddr_fd.end()) {
+struct ipcfg* ipcfg_map_find(in_addr_t addr){
+    if(localaddr_ipset_map.find(addr) == localaddr_ipset_map.end()) {
         return 0;
     }
-    return peeraddr_fd.at(addr);
+    return localaddr_ipset_map.at(addr);
 }
 
-int ipcfg_peer_fd_delete(struct sockaddr_in addr){
-    if(peeraddr_fd.find(addr) == peeraddr_fd.end()) {
+int ipcfg_map_delete(in_addr_t addr){
+    if(localaddr_ipset_map.find(addr) == localaddr_ipset_map.end()) {
         return -1;
     }
-    peeraddr_fd.erase(addr);
+    localaddr_ipset_map.erase(addr);
     return 0;
 }
 
